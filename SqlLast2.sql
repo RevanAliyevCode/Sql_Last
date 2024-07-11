@@ -24,47 +24,19 @@ CREATE TABLE Student (
 );
 
 TRUNCATE TABLE Student;
+DROP TABLE [Group]
 
 
-INSERT INTO [Group] (Name, [Limit], BeginDate, EndDate) VALUES ('Group A', 2, '2024-01-01', '2024-12-31');
+INSERT INTO [Group] (Name, [Limit], BeginDate, EndDate) VALUES ('Group A', 1, '2024-01-01', '2024-12-31');
 INSERT INTO [Group] (Name, [Limit], BeginDate, EndDate) VALUES ('Group B', 3, '2024-01-01', '2024-12-31');
 
 
 INSERT INTO Student (Name, Surname, Email, PhoneNumber, BirthDate, GPA, GroupId) VALUES ('John', 'Doe', 'john.doe@example.com', '1234567890', '2006-01-15', 87.5, 1);
-INSERT INTO Student (Name, Surname, Email, PhoneNumber, BirthDate, GPA, GroupId) VALUES ('Jane', 'Smith', 'jane.smith@example.com', '0987654321', '2018-04-20', 76.8, 1);
+INSERT INTO Student (Name, Surname, Email, PhoneNumber, BirthDate, GPA, GroupId) VALUES ('Jane', 'Smith', 'jane.smith@example.com', '0987654321', '2006-04-20', 76.8, 2);
 
 
 
-CREATE TRIGGER trg_CheckGroupLimit
-ON Student
-INSTEAD OF INSERT
-AS
-BEGIN
-    DECLARE @GroupId INT;
-    DECLARE @GroupLimit INT;
-    DECLARE @StudentCount INT;
-
-    SELECT @GroupId = GroupId FROM INSERTED;
-
-    SELECT @GroupLimit = [Limit] FROM [Group] WHERE Id = @GroupId;
-
-    SELECT @StudentCount = COUNT(*) FROM Student WHERE GroupId = @GroupId;
-
-    IF @StudentCount < @GroupLimit
-    BEGIN
-        INSERT INTO Student (Name, Surname, Email, PhoneNumber, BirthDate, GPA, GroupId)
-        SELECT Name, Surname, Email, PhoneNumber, BirthDate, GPA, GroupId FROM INSERTED;
-    END
-    ELSE
-    BEGIN
-        RAISERROR('Group limit exceeded. Cannot add more students to this group.', 16, 1);
-    END
-END;
-
-DROP TRIGGER trg_CheckGroupLimit;
-
-
-CREATE TRIGGER trg_CheckStudentAge
+CREATE TRIGGER trg_CheckGroupLimitAndAge
 ON Student
 INSTEAD OF INSERT
 AS
@@ -72,24 +44,40 @@ BEGIN
     DECLARE @BirthDate DATE;
     DECLARE @CurrentDate DATE = GETDATE();
     DECLARE @Age INT;
+    DECLARE @GroupId INT;
+    DECLARE @GroupLimit INT;
+    DECLARE @StudentCount INT;
 
+    SELECT @GroupId = GroupId FROM INSERTED;
     SELECT @BirthDate = BirthDate FROM INSERTED;
-
     SELECT @Age = DATEDIFF(YEAR, @BirthDate, @CurrentDate);
+    SELECT @GroupLimit = [Limit] FROM [Group] WHERE Id = @GroupId;
+    SELECT @StudentCount = COUNT(*) FROM Student WHERE GroupId = @GroupId;
 
-    IF @Age > 16
+
+    IF @Age > 16 AND @StudentCount < @GroupLimit
     BEGIN
         INSERT INTO Student (Name, Surname, Email, PhoneNumber, BirthDate, GPA, GroupId)
         SELECT Name, Surname, Email, PhoneNumber, BirthDate, GPA, GroupId FROM INSERTED;
     END
     ELSE
     BEGIN
-        RAISERROR('Student is 16 years old or younger. Cannot add to the group.', 16, 1);
+		IF @Age <= 16
+		BEGIN
+			RAISERROR('Student is 16 years old or younger', 16, 1);
+		END
+
+		IF @StudentCount >= @GroupLimit
+		BEGIN
+			RAISERROR('There is no place left in this group', 16, 1);
+		END
     END
 END;
 
+DROP TRIGGER trg_CheckGroupLimitAndAge;
 
-CREATE FUNCTION GetAverageGPA
+
+CREATE FUNCTION FindAverageGPA
     (@groupId INT)
 RETURNS DECIMAL(5, 2)
 AS
