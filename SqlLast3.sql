@@ -34,15 +34,16 @@ INSERT INTO Departments (Name) VALUES ('IT');
 INSERT INTO Departments (Name) VALUES ('Sales');
 
 
-INSERT INTO Positions (Name, [Limit]) VALUES ('Manager', 2);
+INSERT INTO Positions (Name, [Limit]) VALUES ('Manager', 1);
 INSERT INTO Positions (Name, [Limit]) VALUES ('Engineer', 5);
 INSERT INTO Positions (Name, [Limit]) VALUES ('Salesperson', 3);
 
+TRUNCATE TABLE Workers;
 
 INSERT INTO Workers (Name, Surname, PhoneNumber, Salary, BirthDate, DepartmentId, PositionId)
 VALUES ('John', 'Doe', '1234567890', 5000.00, '1985-01-15', 1, 1);
 INSERT INTO Workers (Name, Surname, PhoneNumber, Salary, BirthDate, DepartmentId, PositionId)
-VALUES ('Jane', 'Smith', '0987654321', 4000.00, '1990-04-20', 2, 2);
+VALUES ('Jane', 'Smith', '0987654321', 4000.00, '2016-04-20', 2, 1);
 
 
 
@@ -62,7 +63,7 @@ END;
 
 
 
-CREATE TRIGGER trg_CheckWorkerAge
+CREATE TRIGGER trg_CheckWorkerAgeAndPositionLimit
 ON Workers
 INSTEAD OF INSERT
 AS
@@ -71,47 +72,34 @@ BEGIN
     DECLARE @CurrentDate DATE = GETDATE();
     DECLARE @Age INT;
 
-    SELECT @BirthDate = BirthDate FROM INSERTED;
-
-    SELECT @Age = DATEDIFF(YEAR, @BirthDate, @CurrentDate);
-
-    IF @Age >= 18
-    BEGIN
-        INSERT INTO Workers (Name, Surname, PhoneNumber, Salary, BirthDate, DepartmentId, PositionId)
-        SELECT Name, Surname, PhoneNumber, Salary, BirthDate, DepartmentId, PositionId FROM INSERTED;
-    END
-    ELSE
-    BEGIN
-        RAISERROR('Worker is younger than 18 years old. Cannot add to the workers.', 16, 1);
-    END
-END;
-
-
-
-
-CREATE TRIGGER trg_CheckPositionLimit
-ON Workers
-INSTEAD OF INSERT
-AS
-BEGIN
-    DECLARE @PositionId INT;
+	DECLARE @PositionId INT;
     DECLARE @PositionLimit INT;
     DECLARE @WorkerCount INT;
 
+    SELECT @BirthDate = BirthDate FROM INSERTED;
+    SELECT @Age = DATEDIFF(YEAR, @BirthDate, @CurrentDate);
+
     SELECT @PositionId = PositionId FROM INSERTED;
-
     SELECT @PositionLimit = [Limit] FROM Positions WHERE Id = @PositionId;
-
     SELECT @WorkerCount = COUNT(*) FROM Workers WHERE PositionId = @PositionId;
 
-    IF @WorkerCount < @PositionLimit
+    IF @Age >= 18 AND @WorkerCount < @PositionLimit
     BEGIN
         INSERT INTO Workers (Name, Surname, PhoneNumber, Salary, BirthDate, DepartmentId, PositionId)
         SELECT Name, Surname, PhoneNumber, Salary, BirthDate, DepartmentId, PositionId FROM INSERTED;
     END
     ELSE
     BEGIN
-        RAISERROR('Position limit exceeded. Cannot add more workers to this position.', 16, 1);
+		IF @Age < 18
+		BEGIN
+			RAISERROR('Worker is younger than 18 years old', 16, 1);
+		END
+
+		IF @WorkerCount >= @PositionLimit
+		BEGIN
+			RAISERROR('Position reached own limit', 16, 1);
+		END
     END
 END;
 
+DROP TRIGGER trg_CheckWorkerAgeAndPositionLimit;
